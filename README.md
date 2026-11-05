@@ -1,4 +1,4 @@
-# 🏢 Agent Office
+# 🏢 Agent Office [![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE)
 
 **A small team of AI agents that researches, builds, quality-checks and lists digital products, shown as a pixel-art office you can watch.**
 
