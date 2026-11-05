@@ -142,4 +142,8 @@ Designed, directed and tested by me; implemented iteratively with an AI coding a
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Bundled fonts (Press Start 2P, IBM Plex Sans) are under the SIL Open Font License.
+**[PolyForm Noncommercial 1.0.0](LICENSE)**: you're welcome to read, run, learn from and modify this project for
+personal, educational and other non-commercial purposes. **Commercial use (including selling it or products made
+with it as a service) requires my permission**; open an issue or contact me via GitHub.
+
+Bundled fonts (Press Start 2P, IBM Plex Sans) are under the SIL Open Font License.
