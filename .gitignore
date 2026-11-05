@@ -1,0 +1,10 @@
+# secrets and personal data never go to git
+keys.env
+data/*
+!data/.gitkeep
+output/*
+!output/.gitkeep
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

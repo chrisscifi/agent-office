@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Office</title>
+<style>
+@font-face{font-family:"Press Start 2P";src:url(/static/fonts/press-start-2p.woff2) format("woff2");font-display:swap}
+@font-face{font-family:"IBM Plex Sans";src:url(/static/fonts/ibm-plex-sans-400.woff2) format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"IBM Plex Sans";src:url(/static/fonts/ibm-plex-sans-600.woff2) format("woff2");font-weight:600;font-display:swap}
+:root{
+  --bg:#17141f; --panel:#221d2e; --panel2:#2b2539; --line:#3a3250; --text:#ece6f7; --muted:#9d93b5;
+  --good:#5be39b; --bad:#ff6b7a; --warn:#ffc857; --accent:#9b7bff;
+  --pixel:"Press Start 2P", monospace; --sans:"IBM Plex Sans", system-ui, sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 var(--sans)}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:16px;padding:16px;min-height:100vh}
+@media (max-width:1000px){.app{grid-template-columns:1fr;padding:10px}}
+header{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+h1{font:14px var(--pixel);margin:0;letter-spacing:1px}
+h2{font:10px var(--pixel);margin:0 0 10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.badge{font:8px var(--pixel);padding:5px 7px;border-radius:3px;background:var(--warn);color:#2a1f00}
+.spacer{flex:1}
+button{font:9px var(--pixel);cursor:pointer;border:0;border-radius:3px;padding:8px 10px;background:var(--panel2);color:var(--text);
+  box-shadow:inset 0 -3px 0 rgba(0,0,0,.35)}
+button:hover{filter:brightness(1.2)} button:active{transform:translateY(1px);box-shadow:none}
+button.go{background:#2f8f5f} button.no{background:#8f2f3f} button.meh{background:#5a4a8a}
+.office{position:relative;background:#0f0c16;border:3px solid var(--line);border-radius:6px;overflow:hidden}
+canvas{display:block;width:100%;height:auto;image-rendering:pixelated;cursor:pointer}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:2px solid var(--line);border-radius:4px;padding:8px 10px;
+  font-size:13px;max-width:240px;display:none}
+.tip b{font:9px var(--pixel)}
+.side{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--panel);border:2px solid var(--line);border-radius:6px;padding:12px}
+.money{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.money div{background:var(--panel2);border-radius:4px;padding:8px}
+.money small{display:block;color:var(--muted);font-size:11px}
+.money b{font:12px var(--pixel)}
+.bar{height:8px;background:var(--panel2);border-radius:4px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--accent)}
+.muted{color:var(--muted);font-size:13px}
+.item{background:var(--panel2);border-radius:5px;padding:10px;margin-top:8px;border-left:4px solid var(--accent)}
+.item h3{margin:2px 0 4px;font-size:15px}
+.row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}
+details{margin-top:6px} summary{cursor:pointer;color:var(--muted);font-size:13px}
+.desc{white-space:pre-wrap;font-size:13px;margin-top:6px;max-height:220px;overflow:auto}
+a{color:#b9a5ff}
+.chip{font-size:11px;padding:2px 7px;border-radius:10px;background:#3a3250;color:var(--muted)}
+.chip.awaiting{background:var(--warn);color:#2a1f00}.chip.live{background:var(--good);color:#002a14}
+.chip.approved{background:#7bc4ff;color:#00233a}
+input,select{font:14px var(--sans);background:var(--bg);color:var(--text);border:2px solid var(--line);border-radius:4px;padding:6px 8px}
+input{flex:1;min-width:0}
+.log{font-size:12.5px;max-height:240px;overflow:auto}
+.log div{padding:3px 0;border-bottom:1px solid var(--line)}
+.log span{color:var(--muted);margin-right:6px}
+.memo{white-space:pre-wrap;font-size:14px}
+.conn{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.conn b{width:92px;font-size:13px}.conn .st{font-size:12px;color:var(--muted);flex-basis:100%;margin-left:100px;margin-top:-4px}
+.ok{color:var(--good)!important}.err{color:var(--bad)!important}
+.qa{font-size:12px;padding:2px 7px;border-radius:10px;background:#1e3b2c;color:var(--good)}
+.stream{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}
+ol{margin:6px 0 0 18px;padding:0;font-size:13px}
+</style>
+</head>
+<body>
+<div class="app">
+  <main>
+    <header>
+      <h1>🏢 AGENT OFFICE</h1>
+      <span class="badge" id="demo" hidden>DEMO MODE</span>
+      <span class="spacer"></span>
+      <button id="pauseBtn" onclick="post('/api/pause')">⏸ PAUSE OFFICE</button>
+    </header>
+    <div class="office">
+      <canvas id="c" width="1440" height="900"></canvas>
+      <div class="tip" id="tip"></div>
+    </div>
+    <p class="muted">Click an agent to see what they're doing. The glowing tray at the bottom is <b>your inbox</b>: that's your only job.</p>
+  </main>
+
+  <aside class="side">
+    <section class="card">
+      <h2>Money</h2>
+      <div class="money">
+        <div><small>Revenue</small><b id="rev">€0</b></div>
+        <div><small>AI cost</small><b id="cost">€0</b></div>
+        <div><small>Net</small><b id="net">€0</b></div>
+      </div>
+      <div class="muted" style="margin-top:8px" id="budgetTxt"></div>
+      <div class="bar"><i id="budgetBar"></i></div>
+    </section>
+
+    <section class="card" id="trialCard" hidden>
+      <h2>🧪 Claude builder trial</h2>
+      <div id="trial"></div>
+    </section>
+
+    <section class="card" id="connCard">
+      <h2>🔌 AI connections</h2>
+      <div class="muted" id="connHint"></div>
+      <div id="conns"></div>
+      <div class="row"><button onclick="testConns(this)">TEST ALL</button><span class="muted" id="lastModel"></span></div>
+    </section>
+
+    <section class="card" id="memoCard" hidden><h2>Weekly memo from Mira</h2><div class="memo" id="memo"></div></section>
+
+    <section class="card"><h2>📥 Your inbox <span id="inboxN"></span></h2><div id="inbox"></div></section>
+    <section class="card" id="uploadCard" hidden><h2>⬆ Ready to upload</h2><div id="upload"></div></section>
+    <section class="card"><h2>Departments</h2><div id="streams"></div>
+      <div class="item" style="border-color:var(--accent)">
+        <b>＋ New department</b>
+        <div class="muted">Type an area: Mira writes the brief and the team starts on it.</div>
+        <div class="row"><input id="deptName" placeholder="e.g. Wedding planner toolkits" maxlength="40"></div>
+        <div class="row"><input id="deptAbout" placeholder="optional: who buys it, what you know about it" maxlength="500"></div>
+        <div class="row"><button class="go" onclick="addDept()">ADD</button>
+          <button onclick="post('/api/departments/suggest')">💡 ASK MIRA FOR AN IDEA</button>
+          <span class="muted" id="deptStatus"></span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Log a sale</h2>
+      <div class="muted">Gumroad sales import automatically if you add a token. Etsy/other sales: log them here.</div>
+      <div class="row">
+        <select id="saleStream"></select>
+        <input id="saleAmt" type="number" step="0.01" placeholder="€" style="max-width:90px">
+        <button class="go" onclick="logSale()">ADD</button>
+      </div>
+    </section>
+
+    <section class="card"><h2>Activity</h2><div class="log" id="log"></div></section>
+  </aside>
+</div>
+
+<script>
+// ───────────────────────── data ─────────────────────────
+let S = null;
+const $ = id => document.getElementById(id);
+// only touch the page when something actually changed, so open dropdowns and typed text survive refreshes
+function setHTML(el, html){ if (el._h !== html) { el.innerHTML = html; el._h = html; } }
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const eur = n => (n < 0 ? "-€" : "€") + Math.abs(n).toFixed(2);
+
+async function post(url, body){
+  await fetch(url, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body || {})});
+  refresh();
+}
+async function refresh(){
+  try { S = await (await fetch("/api/state")).json(); render(); } catch(e) {}
+}
+setInterval(refresh, 1500); refresh();
+
+
+const PROVIDERS = [
+  ["groq", "GROQ_API_KEY", "Groq (free)", "https://console.groq.com/keys"],
+  ["gemini", "GEMINI_API_KEY", "Gemini (free)", "https://aistudio.google.com/apikey"],
+  ["openrouter", "OPENROUTER_API_KEY", "OpenRouter", "https://openrouter.ai/settings/keys"],
+  ["ollama", null, "Ollama (local)", "https://ollama.com/download"],
+  ["claude", "ANTHROPIC_API_KEY", "Claude (paid)", "https://console.anthropic.com/settings/keys"],
+];
+let connBuilt = false, testResult = {};
+function renderConns(){
+  const n = PROVIDERS.filter(p => S.providers[p[0]].connected).length;
+  $("connHint").innerHTML = n ? `${n} connected. The office uses the free ones first and switches automatically when one hits its daily limit.`
+    : `<b style="color:var(--warn)">Connect at least one free AI to leave demo mode.</b> Groq is the best start: free, no card, 2 minutes.`;
+  if (!connBuilt) {
+    $("conns").innerHTML = PROVIDERS.map(([id, env, label, url]) => `<div class="conn">
+      <b>${label}</b>${env ? `<input id="k_${id}" type="password" placeholder="paste key" autocomplete="off">
+      <button onclick="saveKey('${env}','${id}')">SAVE</button>` : `<span class="muted" style="flex:1">runs on your laptop</span>`}
+      <a href="${url}" target="_blank" rel="noopener">get ${env ? "key" : "it"}</a>
+      <div class="st" id="st_${id}"></div></div>`).join("");
+    connBuilt = true;
+  }
+  for (const [id, env] of PROVIDERS) {
+    const p = S.providers[id], el = $("st_" + id);
+    let txt = p.connected ? (env ? `key ${S.keys[env]} · ` : `models: ${(p.models||[]).join(", ")} · `) + p.status + ` · ${p.calls_today} calls today` : "not connected";
+    if (testResult[id]) txt += " · test: " + testResult[id];
+    el.textContent = txt;
+    el.className = "st " + (/error|failed/.test(txt) ? "err" : p.status === "ready" ? "ok" : "");
+  }
+  const lm = S.last_model;
+  $("lastModel").textContent = lm ? `last used: ${lm.model}` : "";
+}
+async function saveKey(env, id){ const v = $("k_" + id).value.trim(); if (!v) return; await post("/api/keys", {name: env, value: v}); $("k_" + id).value = ""; }
+async function testConns(btn){ btn.textContent = "TESTING…"; testResult = await (await fetch("/api/test", {method: "POST"})).json(); btn.textContent = "TEST ALL"; refresh(); }
+function fileIcon(f){ return f.endsWith(".html") ? "🌐" : /\.(py|ipynb)$/.test(f) ? "🐍" : f.endsWith(".dyn") ? "🧩" : f.endsWith(".xlsx") ? "📊" : f.endsWith(".pdf") ? "📕" : f.endsWith(".docx") ? "📝" : "📄"; }
+function renderTrial(){
+  const t = S.trial; $("trialCard").hidden = !t; if (!t) return;
+  const c = t.claude, f = t.free;
+  const state = t.stopped ? "stopped by you" : t.kept ? "kept (no end date)" : t.active ? `day ${Math.min(t.days, Math.floor(t.days - t.days_left) + 1)} of ${t.days} · ${t.days_left.toFixed(1)} days left` : "ended: Claude is off";
+  const cmp = (a, b) => a == null || b == null ? "" : a > b ? ` <b style="color:var(--good)">(+${(a - b).toFixed(1)})</b>` : ` <b style="color:var(--bad)">(${(a - b).toFixed(1)})</b>`;
+  setHTML($("trial"), `<div class="muted">Bo builds with Claude Sonnet 5.5; everything else stays free. ${esc(state)}</div>
+    <div class="money" style="margin-top:8px">
+      <div><small>Spent so far</small><b>${eur(t.spent)}</b></div>
+      <div><small>Claude-built</small><b>${c.products}</b></div>
+      <div><small>Per product</small><b>${c.cost_per_product == null ? "–" : eur(c.cost_per_product)}</b></div>
+    </div>
+    <div class="muted" style="margin-top:8px">Mira's average score: Claude-built <b>${c.avg_qa ?? "–"}</b>${cmp(c.avg_qa, f.avg_qa)} vs free-built <b>${f.avg_qa ?? "–"}</b> (${f.products} products)</div>
+    <div class="row">${t.active && !t.kept ? `<button class="go" onclick="post('/api/trial/keep')">✔ KEEP CLAUDE</button>` : ""}
+      ${t.active ? `<button class="no" onclick="if(confirm('Stop using Claude now?'))post('/api/trial/stop')">■ STOP NOW</button>` : `<button onclick="post('/api/trial/keep')">▶ TURN BACK ON</button>`}</div>`);
+}
+function streamOf(id){ return (S.streams.find(s => s.id === id) || {name:id, color:"#9b7bff"}); }
+
+function render(){
+  $("demo").hidden = !S.demo;
+  $("pauseBtn").textContent = S.paused ? "▶ OPEN OFFICE" : "⏸ PAUSE OFFICE";
+  const m = S.money;
+  $("rev").textContent = eur(m.revenue); $("cost").textContent = eur(m.api_cost);
+  $("net").textContent = eur(m.net); $("net").style.color = m.net >= 0 ? "var(--good)" : "var(--bad)";
+  $("budgetTxt").textContent = `Paid-AI budget (Claude only): €${m.spent_today.toFixed(2)} / €${m.budget_day} today · €${m.spent_month.toFixed(2)} / €${m.budget_month} this month`;
+  $("budgetBar").style.width = Math.min(100, 100 * m.spent_month / m.budget_month) + "%";
+
+  renderConns();
+  renderTrial();
+  $("memoCard").hidden = !S.memo; if (S.memo) $("memo").textContent = S.memo.text;
+
+  // inbox
+  const nIn = S.inbox.length + S.proposals.length;
+  $("inboxN").textContent = nIn ? `(${nIn})` : "";
+  const propHTML = S.proposals.map(p => `<div class="item" style="border-color:var(--warn)">
+      <span class="chip awaiting">💡 New department idea from Mira</span>
+      <h3>${esc(p.name)}</h3>
+      <div class="muted">${esc(p.why || "")}</div>
+      <details><summary>What the team would make</summary><div class="desc">${esc(p.brief)}\n\nSells on: ${esc(p.channel)}</div></details>
+      <div class="row"><button class="go" onclick="post('/api/proposals/${p.id}/accept')">✔ OPEN IT</button>
+      <button class="no" onclick="post('/api/proposals/${p.id}/decline')">✖ NO THANKS</button></div></div>`).join("");
+  setHTML($("inbox"), propHTML + (S.inbox.length ? S.inbox.map(a => {
+    const p = a.product, L = p.listing || {}, st = streamOf(p.stream);
+    return `<div class="item" style="border-color:${st.color}">
+      <span class="chip">${esc(st.name)}</span>
+      <h3>${esc(L.title || p.title)}</h3>
+      <div class="muted">${esc(L.subtitle || "")} · <b>€${esc(L.price_eur)}</b></div>
+      ${p.qa ? `<div class="row"><span class="qa">Mira's QA ${esc(p.qa.score)}/10</span><span class="muted">${esc(p.qa.verdict)}</span></div>` : ""}
+      ${(p.previews||[]).length ? `<div class="row">${p.previews.map(im => `<a href="/output/${encodeURI(im)}" target="_blank" rel="noopener"><img src="/output/${encodeURI(im)}" alt="preview" style="width:72px;height:102px;object-fit:cover;border-radius:3px;border:1px solid var(--line)"></a>`).join("")}</div>` : ""}
+      <details><summary>Listing & posts</summary><div class="desc">${L.etsy_title ? "ETSY TITLE: " + esc(L.etsy_title) + "\nETSY TAGS: " + esc((L.etsy_tags||[]).join(", ")) + "\nAI NOTE: " + esc(L.ai_disclosure||"") + "\n\n" : ""}${esc(L.description)}\n\nTags: ${esc((L.tags||[]).join(", "))}\n\n${(L.posts||[]).map(x=>"— "+esc(x.where)+":\n"+esc(x.text)).join("\n\n")}</div></details>
+      <details open><summary>Files (${(p.files||[]).filter(f=>!f.endsWith(".html")).length}): click to read</summary><div class="desc">${(p.files||[]).filter(f=>!f.endsWith(".html")).map(f=>`<a href="/view?p=${encodeURIComponent(f)}">${fileIcon(f)} ${esc(f.split("/files/")[1]||f)}</a>`).join("<br>")}</div></details>
+      <div class="row">
+        <button onclick="post('/api/products/${p.id}/open_folder')">📂 FOLDER</button>
+        <button class="go" onclick="post('/api/approvals/${a.id}/approve')">✔ APPROVE</button>
+        <button class="meh" onclick="revise(${a.id})">✎ REVISE</button>
+        <button class="no" onclick="if(confirm('Drop this product?'))post('/api/approvals/${a.id}/drop')">✖ DROP</button>
+      </div></div>`;
+  }).join("") : (S.proposals.length ? "" : `<div class="muted">Nothing to review. The team is working — go rest. 🌙</div>`)));
+
+  // to upload
+  $("uploadCard").hidden = !S.to_upload.length;
+  setHTML($("upload"), S.to_upload.map(p => {
+    const L = p.listing || {};
+    return `<div class="item" style="border-color:${streamOf(p.stream).color}">
+      <h3>${esc(L.title || p.title)}</h3>
+      <ol>
+        <li>Download <a href="/output/${esc(p.zip)}" download>the zip</a> and read <a href="/view?p=${encodeURIComponent(p.folder + "/LISTING.md")}">the listing text</a> (or <a href="#" onclick="post('/api/products/${p.id}/open_folder');return false">open the folder</a>)</li>
+        <li>Gumroad/Etsy → new digital product → paste title, description, price €${esc(L.price_eur)}, upload zip</li>
+        <li>Paste the product link below (~5 min total)</li>
+      </ol>
+      <div class="row"><input id="url${p.id}" placeholder="https://…">
+      <button class="go" onclick="post('/api/products/${p.id}/live',{url:$('url${p.id}').value})">MARK LIVE</button>
+      <button class="no" title="Remove (e.g. demo products)" onclick="if(confirm('Remove this product?'))post('/api/products/${p.id}/remove')">✖</button></div></div>`;
+  }).join(""));
+
+  // streams
+  setHTML($("streams"), S.streams.map(s => `<div class="item" style="border-color:${s.color}">
+    <div class="stream"><div><span class="dot" style="background:${s.color}"></span><b>${esc(s.name)}</b></div>
+    <div><button onclick="post('/api/streams/${s.id}/toggle')">${s.paused ? "▶ RESUME" : "⏸"}</button>
+    ${s.custom ? `<button class="no" title="Close this department" onclick="if(confirm('Close ${esc(s.name)}? Its products stay in the output folder.'))post('/api/departments/${s.id}/delete')">✖</button>` : ""}</div></div>
+    <div class="muted">${s.stats.live} live · ${s.stats.sales} sales · ${eur(s.stats.revenue)} revenue · ${eur(s.stats.api_cost)} AI cost</div>
+    <div class="row">${s.pipeline.map(p => `<span class="chip ${p.status}" title="${esc(p.title)}">#${p.id} ${p.status}</span>`).join("") || '<span class="muted">nothing yet</span>'}</div>
+  </div>`).join(""));
+
+  $("deptStatus").textContent = S.dept_requests.length ? `Mira is setting up: ${S.dept_requests.map(r => r.name).join(", ")}…`
+    : S.want_proposal ? "Mira will suggest one in a few minutes…" : "";
+  const sel = $("saleStream");
+  if (sel.options.length !== S.streams.length) sel.innerHTML = S.streams.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join("");
+
+  setHTML($("log"), S.events.map(e => `<div><span>${new Date(e.ts*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</span>${esc((S.agents[e.agent]||{name:e.agent}).name)}: ${esc(e.text)}</div>`).join(""));
+
+  syncAgents();
+}
+function revise(id){ const note = prompt("What should Bo change?"); if (note) post(`/api/approvals/${id}/revise`, {note}); }
+function addDept(){ const n = $("deptName").value.trim(); if (!n) return;
+  post("/api/departments", {name: n, about: $("deptAbout").value}); $("deptName").value = ""; $("deptAbout").value = ""; }
+function logSale(){ const a = parseFloat($("saleAmt").value); if (a > 0) { post("/api/sale", {stream: $("saleStream").value, amount: a}); $("saleAmt").value = ""; } }
+
+// ───────────────────────── pixel office ─────────────────────────
+const cv = $("c"), ctx = cv.getContext("2d"), K = 3;           // 480×300 logical pixels, ×3
+const W = 480, H = 300;
+const R = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x)*K, Math.round(y)*K, w*K, h*K); };
+
+const DESKS = {
+  master:     {x: 232, y: 86,  shirt: "#9b7bff", hair: "#2b1d0e", skin: "#f1c27d", label: "MIRA · MASTER"},
+  scout:      {x: 84,  y: 150, shirt: "#4fc3f7", hair: "#e0a35a", skin: "#e8b48a", label: "SOL · SCOUT"},
+  builder:    {x: 380, y: 150, shirt: "#ff8a65", hair: "#1b1b1b", skin: "#c68642", label: "BO · BUILDER"},
+  marketer:   {x: 84,  y: 230, shirt: "#f06292", hair: "#7a2e1d", skin: "#f1c27d", label: "MAYA · MARKETER"},
+  accountant: {x: 380, y: 230, shirt: "#81c784", hair: "#8d8d8d", skin: "#e8b48a", label: "ABE · ACCOUNTANT"},
+};
+const SPOTS = { inbox: {x: 232, y: 262}, coffee: {x: 34, y: 78} };
+const actors = {};
+for (const [id, d] of Object.entries(DESKS)) actors[id] = {id, x: d.x + 6, y: d.y + 2, home: {x: d.x + 6, y: d.y + 2}, trip: null, step: 0};
+
+function syncAgents(){
+  for (const [id, a] of Object.entries(S.agents)) {
+    const act = actors[id]; if (!act) continue;
+    act.state = a.state; act.bubble = a.bubble;
+    if (a.state === "walking" && a.target && act.lastTrip !== a.updated) {
+      act.lastTrip = a.updated;
+      const t = DESKS[a.target] ? {x: DESKS[a.target].x - 10, y: DESKS[a.target].y + 6} : SPOTS[a.target];
+      if (t) act.trip = {to: t, phase: "go", wait: 0};
+    }
+    if (a.state === "idle" && /coffee/.test(a.bubble || "") && !act.trip && act.lastCoffee !== a.updated) {
+      act.lastCoffee = a.updated; act.trip = {to: SPOTS.coffee, phase: "go", wait: 0};
+    }
+  }
+}
+
+function drawRoom(t){
+  // floor
+  for (let y = 48; y < H; y += 12) for (let x = -24; x < W; x += 24)
+    R(x + ((y/12)%2 ? 12 : 0), y, 24, 12, ((x/24 + y/12) % 2) ? "#5b4636" : "#634c3a");
+  for (let x = 0; x < W; x += 24) R(x, 48, 1, H-48, "#4e3c2f");
+  // wall
+  R(0, 0, W, 48, "#3b3352"); R(0, 44, W, 4, "#2a2440");
+  // windows with night sky
+  for (const wx of [20, 340, 410]) {
+    R(wx, 8, 52, 28, "#1c2a4a"); R(wx+2, 10, 48, 24, "#16213d");
+    for (let i = 0; i < 6; i++) R(wx + 6 + (i*17)%44, 13 + (i*11)%17, 1, 1, (Math.sin(t/400 + i) > 0) ? "#fff" : "#8899cc");
+    R(wx + 38, 13, 6, 6, "#f4f1c9"); R(wx+24, 8, 2, 28, "#2a2440"); R(wx, 21, 52, 2, "#2a2440");
+  }
+  // department banners
+  const ss = S?.streams || [], gap = Math.min(26, 84 / Math.max(1, ss.length)), bw = Math.max(6, gap - 6);
+  ss.forEach((s, i) => {
+    const bx = 92 + i * gap; R(bx, 6, bw, 26, s.paused ? "#555" : s.color); R(bx, 32, bw, 3, "#0005");
+    R(bx + bw/2 - 2, 12, 4, 6, "#fff8");
+  });
+  // money board
+  R(180, 6, 120, 34, "#1e3b2c"); R(178, 4, 124, 2, "#8d6e4f"); R(178, 40, 124, 2, "#8d6e4f");
+  // master glass office
+  R(196, 56, 88, 60, "#9fd3ff22"); R(196, 56, 88, 2, "#9fd3ff88"); R(196, 56, 2, 60, "#9fd3ff88"); R(282, 56, 2, 60, "#9fd3ff88");
+  R(196, 114, 30, 2, "#9fd3ff88"); R(254, 114, 30, 2, "#9fd3ff88");
+  // coffee corner + plants
+  R(24, 58, 18, 22, "#555"); R(27, 61, 12, 6, "#222"); R(30, 70, 6, 6, "#ddd"); R(26, 80, 22, 4, "#6d4c33");
+  for (const [px, py] of [[452, 60], [8, 270], [452, 270], [300, 60]]) { R(px, py+10, 12, 10, "#a0522d"); R(px-2, py, 16, 11, "#3e8e41"); R(px+2, py-4, 8, 6, "#4caf50"); }
+  // rug
+  R(150, 170, 180, 70, "#47305c"); R(154, 174, 172, 62, "#563a70");
+  // inbox tray (YOU)
+  const n = S?.inbox?.length || 0;
+  R(214, 262, 44, 20, "#8d6e4f"); R(216, 258, 40, 6, n ? (Math.floor(t/400)%2 ? "#ffc857" : "#ffe9a8") : "#c9b48f");
+  for (let i = 0; i < Math.min(n, 4); i++) R(220 + i*2, 252 - i*3, 30, 4, "#f5f5f5");
+}
+
+function drawDesk(d){
+  R(d.x - 4, d.y + 14, 40, 4, "#00000040");
+  R(d.x - 6, d.y + 2, 40, 12, "#a1785a"); R(d.x - 6, d.y + 2, 40, 2, "#bf946f"); R(d.x - 4, d.y + 14, 3, 8, "#6d4c33"); R(d.x + 29, d.y + 14, 3, 8, "#6d4c33");
+}
+function drawMonitor(d, on, t){
+  R(d.x + 16, d.y - 10, 16, 11, "#222"); R(d.x + 17, d.y - 9, 14, 9, on ? (Math.floor(t/300)%2 ? "#5be39b" : "#4fd08a") : "#2c3e50");
+  if (on) for (let i = 0; i < 3; i++) R(d.x + 19, d.y - 7 + i*3, 4 + ((t/150 + i*3) % 8), 1, "#0b3d22");
+  R(d.x + 23, d.y + 1, 2, 2, "#222");
+}
+function drawPerson(a, d, t){
+  const moving = a.trip && a.trip.phase !== "wait";
+  const seated = !a.trip && (a.state === "working" || a.state === "thinking" || a.state === "napping");
+  const x = a.x, y = a.y + (seated ? 4 : 0) + (a.state === "napping" ? 2 : 0);
+  R(x, y + 18, 10, 2, "#00000050");
+  // legs
+  const lg = moving ? Math.floor(t/120) % 2 : 0;
+  if (!seated) { R(x + 2, y + 14, 2, 4 + lg, "#2e3a59"); R(x + 6, y + 14, 2, 4 + (1-lg), "#2e3a59"); }
+  // body + arms
+  R(x + 1, y + 7, 8, 8, d.shirt);
+  const typing = a.state === "working" && seated ? Math.floor(t/90) % 2 : 0;
+  R(x - 1, y + 8 + typing, 2, 5, d.shirt); R(x + 9, y + 8 + (1-typing), 2, 5, d.shirt);
+  // head
+  R(x + 1, y, 8, 7, d.skin); R(x, y - 1, 10, 3, d.hair); R(x, y, 2, 4, d.hair);
+  if (a.state === "napping") { R(x + 3, y + 3, 2, 1, "#333"); R(x + 6, y + 3, 2, 1, "#333"); }
+  else if (Math.floor(t/2500 + x) % 7 === 0 && t % 2500 < 150) R(x + 3, y + 3, 4, 1, "#333");
+  else { R(x + 3, y + 3, 1, 2, "#222"); R(x + 6, y + 3, 1, 2, "#222"); }
+  if (a.state === "napping") {
+    ctx.fillStyle = "#cfd8ff"; ctx.font = `${7*K}px "Press Start 2P", monospace`;
+    const z = (t/600) % 3; ctx.fillText("z", (x + 10 + z*3)*K, (y - 2 - z*4)*K);
+  }
+}
+function wrap(text, max){
+  const words = String(text).split(" "), lines = [""];
+  for (const w of words) { if ((lines.at(-1) + " " + w).trim().length > max) lines.push(w); else lines[lines.length-1] = (lines.at(-1) + " " + w).trim(); }
+  return lines.slice(0, 3);
+}
+let placed = [];
+function drawBubble(a, text){
+  if (!text) return;
+  const lines = wrap(text, 24);
+  ctx.font = `${4*K}px "Press Start 2P", monospace`;
+  const w = Math.max(...lines.map(l => ctx.measureText(l).width)) / K + 8, h = lines.length * 7 + 6;
+  let bx = Math.max(2, Math.min(W - w - 2, a.x + 5 - w/2)), by = a.y - h - 6;
+  // keep bubbles from covering each other: nudge this one up past any bubble already drawn this frame
+  for (let tries = 0; tries < 6; tries++) {
+    const hit = placed.find(r => bx < r.x + r.w + 2 && bx + w + 2 > r.x && by < r.y + r.h + 2 && by + h + 2 > r.y);
+    if (!hit) break;
+    by = hit.y - h - 3;
+  }
+  by = Math.max(2, by);
+  placed.push({x: bx, y: by, w, h});
+  const tail = Math.min(a.y - 6, by + h);
+  R(bx, by, w, h, "#fffdf5"); R(bx, by + h, w, 1, "#0004");
+  for (let ty = by + h; ty < a.y - 3; ty += 2) R(a.x + 5, ty, 1, 1, "#fffdf5aa");   // dotted tail to the speaker
+  R(a.x + 4, Math.min(tail, a.y - 6), 3, 3, "#fffdf5");
+  ctx.fillStyle = "#222";
+  lines.forEach((l, i) => ctx.fillText(l, (bx + 4)*K, (by + 8 + i*7)*K));
+}
+function drawLabel(d){
+  ctx.font = `${3.3*K}px "Press Start 2P", monospace`; ctx.fillStyle = "#ffffffaa";
+  const w = ctx.measureText(d.label).width / K;
+  ctx.fillText(d.label, (d.x + 13 - w/2)*K, (d.y + 30)*K);
+}
+function drawBoard(){
+  if (!S) return;
+  ctx.font = `${4*K}px "Press Start 2P", monospace`;
+  ctx.fillStyle = "#cfe8d6"; ctx.fillText("REVENUE " + eur(S.money.revenue), 186*K, 16*K);
+  ctx.fillStyle = "#ffb3bb"; ctx.fillText("AI COST " + eur(S.money.api_cost), 186*K, 25*K);
+  ctx.fillStyle = S.money.net >= 0 ? "#5be39b" : "#ff8a95"; ctx.fillText("NET     " + eur(S.money.net), 186*K, 34*K);
+  ctx.font = `${3.3*K}px "Press Start 2P", monospace`; ctx.fillStyle = "#ffe9a8"; ctx.fillText("YOUR INBOX", 217*K, 292*K);
+}
+
+let last = performance.now();
+function frame(t){
+  const dt = Math.min(50, t - last); last = t;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  drawRoom(t);
+  // move actors
+  for (const a of Object.values(actors)) {
+    if (!a.trip) { a.x += (a.home.x - a.x) * .2; a.y += (a.home.y - a.y) * .2; continue; }
+    const tr = a.trip, dest = tr.phase === "back" ? a.home : tr.to;
+    if (tr.phase === "wait") { tr.wait += dt; if (tr.wait > 2200) tr.phase = "back"; continue; }
+    const dx = dest.x - a.x, dy = dest.y - a.y, dist = Math.hypot(dx, dy), sp = dt * 0.06;
+    if (dist < sp) { a.x = dest.x; a.y = dest.y; if (tr.phase === "go") tr.phase = "wait"; else a.trip = null; }
+    else { a.x += dx/dist*sp; a.y += dy/dist*sp; }
+  }
+  // draw back-to-front
+  const order = Object.values(actors).sort((p, q) => p.y - q.y);
+  for (const id of Object.keys(DESKS)) { drawDesk(DESKS[id]); }
+  for (const a of order) {
+    const d = DESKS[a.id];
+    drawMonitor(d, a.state === "working" && !a.trip, t);
+    drawPerson(a, d, t);
+  }
+  for (const id of Object.keys(DESKS)) drawLabel(DESKS[id]);
+  drawBoard();
+  placed = [];
+  for (const a of [...order].reverse()) drawBubble(a, a.trip?.phase === "back" ? "" : (a.state === "thinking" && !a.bubble ? "…" : a.bubble));
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// click an agent → tooltip
+cv.addEventListener("click", e => {
+  const r = cv.getBoundingClientRect(), mx = (e.clientX - r.left) / r.width * W, my = (e.clientY - r.top) / r.height * H;
+  const hit = Object.values(actors).find(a => mx > a.x - 4 && mx < a.x + 14 && my > a.y - 4 && my < a.y + 22);
+  const tip = $("tip");
+  if (!hit || !S) { tip.style.display = "none"; return; }
+  const a = S.agents[hit.id];
+  tip.innerHTML = `<b>${esc(a.name.toUpperCase())}</b><br><span class="muted">${esc(a.role)}</span><br>${esc(a.state)}${a.bubble ? " — " + esc(a.bubble) : ""}`;
+  tip.style.left = Math.min(e.clientX - r.left + 10, r.width - 250) + "px"; tip.style.top = (e.clientY - r.top + 10) + "px"; tip.style.display = "block";
+});
+</script>
+</body>
+</html>

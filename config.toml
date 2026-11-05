@@ -1,0 +1,162 @@
+# ─────────────────────────────────────────────────────────────
+#  Agent Office: settings. Edit this file, then restart.
+#  This is an EXAMPLE persona; replace [owner] and the departments with your own.
+# ─────────────────────────────────────────────────────────────
+
+[owner]
+name = "Alex"
+# The agents read this to decide what they can credibly sell. Keep contact details OUT of it (privacy).
+profile = """
+Example persona: part-time student in data science with a background in architecture (Revit, BIM, Dynamo),
+evening job in hotel reception (night audits, guest messages), speaks English, Spanish and German.
+"""
+# Rules every agent must follow. Keep these.
+rules = """
+- Only create ORIGINAL material. Never copy course material, paid content, software or brand assets.
+- No fake reviews, fake scarcity, fake testimonials or income claims.
+- No impersonating real companies, products or people.
+- Privacy by design: fictional example data only; anything that stores personal data includes retention and
+  privacy guidance; legal/tax/GDPR topics are general guidance, not legal advice.
+- Products must be genuinely useful to a real buyer; prefer small, finished and specific over big and vague.
+- Demand first: only build what evidence shows people already buy (niche > broad). The owner's skills are a bonus,
+  not a requirement.
+- Products must be FINISHED: complete and usable as-is by the intended buyer, never parts they must finish.
+  Non-technical buyers get spreadsheets, documents or offline browser tools; Revit users can get Dynamo Player
+  graphs; coders/data learners can get complete Python projects that run first time.
+"""
+
+[budget]
+# Hard caps on PAID AI (Claude) spending. Free models are never limited by this.
+# When hit, the office simply carries on with the free models.
+monthly_eur = 30.0
+daily_eur = 2.0
+
+# EUR per million tokens, from Anthropic's price list (USD $2 / $10 for Sonnet 5.5, converted at ~0.92).
+# Check https://platform.claude.com/docs/en/about-claude/pricing now and then.
+[pricing."claude-sonnet-5-5"]
+input = 1.85
+output = 9.2
+
+[pricing."claude-haiku-5-5"]
+input = 0.09
+output = 0.46
+
+[trial]
+# Claude switches itself off after this many days unless you press KEEP in the office.
+claude_trial_days = 7
+
+# Each agent tries these AI models in order, skipping any that isn't connected,
+# is resting after hitting its free daily limit, or (Claude) would go over budget.
+# Free first. Claude only kicks in if you add a Claude key — and only for the Builder by default.
+[models]
+master = ["groq:openai/gpt-oss-120b", "gemini:gemini-flash-latest",
+          "gemini:gemini-flash-lite-latest", "openrouter:openrouter/free", "ollama:auto"]
+scout = ["groq:openai/gpt-oss-120b", "gemini:gemini-flash-lite-latest",
+         "openrouter:openrouter/free", "ollama:auto"]
+builder = ["claude:claude-sonnet-5-5", "gemini:gemini-flash-latest",
+           "groq:openai/gpt-oss-120b", "gemini:gemini-flash-lite-latest", "openrouter:openrouter/free", "ollama:auto"]
+marketer = ["groq:openai/gpt-oss-20b", "gemini:gemini-flash-lite-latest", "openrouter:openrouter/free", "ollama:auto"]
+
+# Sol's research with live web search (Etsy, Gumroad, forums). Uses Claude, so it only runs while Claude is
+# connected and within the budget caps above. Roughly EUR 0.05-0.10 per idea search.
+researcher = ["claude:claude-sonnet-5-5"]
+
+[research]
+use_claude_web_research = false
+
+[limits]
+# Groq's free tier rejects very large single requests, so keep its replies modest.
+groq_max_tokens = 6000
+
+[local]
+# Which Ollama model to use ("" = whatever is installed). Set by INSTALL_LOCAL_AI.bat.
+# A 4B model fits in ~6 GB of GPU memory; INSTALL_LOCAL_AI.bat picks a size that fits your machine.
+# If it isn't downloaded, the office uses whatever local model you have.
+model = "qwen3.5:4b"
+# Memory per request. Lower = lighter on your computer.
+num_ctx = 8192
+# true = always run on the processor (set automatically if the graphics card crashes).
+force_cpu = false
+
+[loop]
+# Seconds between agent steps. Each step = at most one Claude call.
+tick_seconds = 240
+# Don't flood your inbox: max products waiting for you per stream.
+max_waiting_per_stream = 1
+# Master pauses a stream after this many weeks with products live but no sales.
+kill_after_weeks_without_sale = 6
+# When the Scout runs on Claude, let it search the web too (small extra cost per search).
+scout_web_search = true
+builder_max_tokens = 12000
+# Mira may send a weak product back to Bo this many times before it goes to you anyway.
+max_auto_revisions = 2
+
+[growth]
+# Mira suggests a new department every few days (you accept or decline in your inbox).
+auto_propose = true
+propose_every_days = 3
+# More departments = each one gets fewer turns, so keep this modest.
+max_departments = 8
+
+[formats]
+# Designed printables (planners, wall art, signs). Off by default: the office focuses on tools and documents.
+allow_printables = false
+
+[render]
+# "browser" = print PDFs with the Edge/Chrome already on this computer (best quality, falls back automatically),
+# "basic" = built-in engine only.
+pdf_engine = "browser"
+
+[privacy]
+# Scrub e-mails and phone/CPR/IBAN/card/passport numbers from everything sent to AI services.
+redact_prompts = true
+# Delete office activity-log entries older than this (products and sales records are kept).
+keep_activity_log_days = 90
+
+[sales]
+# Optional: Gumroad access token (Settings → Advanced → Applications) so the
+# Accountant can import your sales automatically. Leave empty to log sales by hand.
+gumroad_token = ""
+usd_to_eur = 0.92
+
+# ─── Departments ("income streams") ───────────────────────────
+# Each one is a department of the office. Add, remove or set active=false.
+# More can be added from the dashboard, and Mira proposes new ones based on demand.
+
+[[streams]]
+id = "smallbiz"
+name = "Small-Business Spreadsheet Tools"
+color = "#3ecf8e"
+active = true
+channel = "Etsy + Gumroad (digital download)"
+research_queries = ["excel template small business", "cash flow spreadsheet freelancer", "inventory tracker spreadsheet"]
+brief = """
+Ready-made Excel/Google Sheets tools for small businesses and freelancers: cash-flow and budget trackers,
+pricing and margin calculators, inventory and reorder planners, simple KPI dashboards. Everything works by typing
+numbers into yellow input cells. Price 7-24 EUR.
+"""
+
+[[streams]]
+id = "bim"
+name = "Revit & BIM Automation"
+color = "#4f8cff"
+active = true
+channel = "Gumroad (digital download)"
+research_queries = ["Dynamo script Revit", "Revit template standards", "BIM execution plan template"]
+brief = """
+For BIM coordinators and architectural technologists: Dynamo Player tools that run in one click (renumbering,
+parameter audits, view/sheet setup), project-standards documents, BIM execution plan (BEP) clause libraries and
+model QA checklists. Price 9-29 EUR.
+"""
+
+[[streams]]
+id = "hospitality"
+name = "Hotel & Hostel Operations Kits"
+color = "#f5a623"
+active = true
+channel = "Etsy + Gumroad (digital download)"
+research_queries = ["hostel front desk night audit", "hotel SOP template", "small hotel reception checklist"]
+brief = """
+Operations kits for hostels, guesthouses and small hotels: night-audit and shift-handover spreadsheets, SOPs for
+check-in/out, multilingual guest-message templates. Tool-neutral (works with any PMS). Price 7-24 EUR.
+"""
