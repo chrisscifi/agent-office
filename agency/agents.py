@@ -458,6 +458,14 @@ JSON: {{"score":0,"breakdown":{{"usable":0,"complete":0,"correct":0,"specific":0
           (r.get("fix_notes", ""), time.time(), product["id"]))
         log("master", f"QA {score}/10 on #{product['id']} — sent back to Bo: {r.get('fix_notes', '')[:100]}")
         status("master", "walking", f"Bo, needs work ({score}/10)", target="builder")
+    elif score < CFG["loop"].get("min_score_after_revisions", 5):
+        # Still failing after the allowed revisions: shelve it instead of passing it on to Maya and the owner.
+        x("update products set status='dropped', feedback=?, updated=? where id=?",
+          (r.get("fix_notes", ""), time.time(), product["id"]))
+        x("update approvals set status='superseded' where product_id=? and status='pending'", (product["id"],))
+        log("master", f"Shelved #{product['id']}: still {score}/10 after {auto_tries} revisions — "
+                      f"{r.get('verdict', '')[:100]}")
+        status("master", "thinking", f"Shelved #{product['id']} ({score}/10)")
     else:
         x("update products set status='checked', updated=? where id=?", (time.time(), product["id"]))
         log("master", f"QA {score}/10 on #{product['id']} — {r.get('verdict', '')[:100]}")

@@ -77,6 +77,8 @@ model = "qwen3.5:4b"
 num_ctx = 8192
 # true = always run on the processor (set automatically if the graphics card crashes).
 force_cpu = false
+# When the local model runs on the processor, it may use at most this many threads (keeps the computer usable).
+cpu_threads = 4
 
 [loop]
 # Seconds between agent steps. Each step = at most one Claude call.
@@ -88,8 +90,10 @@ kill_after_weeks_without_sale = 6
 # When the Scout runs on Claude, let it search the web too (small extra cost per search).
 scout_web_search = true
 builder_max_tokens = 12000
-# Mira may send a weak product back to Bo this many times before it goes to you anyway.
+# Mira may send a weak product back to Bo this many times.
 max_auto_revisions = 2
+# After those revisions, anything still scoring below this is shelved (never sent to Maya or your inbox).
+min_score_after_revisions = 5
 
 [growth]
 # Mira suggests a new department every few days (you accept or decline in your inbox).
@@ -142,11 +146,14 @@ name = "Revit & BIM Automation"
 color = "#4f8cff"
 active = true
 channel = "Gumroad (digital download)"
-research_queries = ["Dynamo script Revit", "Revit template standards", "BIM execution plan template"]
+research_queries = ["Dynamo script Revit", "Dynamo Player automate Revit task", "BIM execution plan template"]
 brief = """
-For BIM coordinators and architectural technologists: Dynamo Player tools that run in one click (renumbering,
-parameter audits, view/sheet setup), project-standards documents, BIM execution plan (BEP) clause libraries and
-model QA checklists. Price 9-29 EUR.
+DYNAMO-LED. For BIM coordinators and architectural technologists who lose hours to repetitive Revit work. About 2 out
+of 3 products are a DYNAMO PLAYER TOOL (DYNAMO block) that runs in one click: renumbering, parameter audits and bulk
+fills, view/sheet setup, naming-standard checks, model QA reports. Each ships with a Start Here guide and states the
+target versions (Revit 2025+, Dynamo 3.x, CPython3). One job per tool, read-only or preview-first, defensive code with
+readable messages in OUT. The owner tests every Dynamo tool in Revit before approving it. The other third: project
+standards, BIM execution plan (BEP) clause libraries and model QA checklists. Price 9-29 EUR.
 """
 
 [[streams]]
@@ -155,8 +162,10 @@ name = "Hotel & Hostel Operations Kits"
 color = "#f5a623"
 active = true
 channel = "Etsy + Gumroad (digital download)"
-research_queries = ["hostel front desk night audit", "hotel SOP template", "small hotel reception checklist"]
+research_queries = ["small hotel housekeeping checklist", "guesthouse pricing spreadsheet", "hotel staff training manual"]
 brief = """
-Operations kits for hostels, guesthouses and small hotels: night-audit and shift-handover spreadsheets, SOPs for
-check-in/out, multilingual guest-message templates. Tool-neutral (works with any PMS). Price 7-24 EUR.
+Operations kits for independent hostels, guesthouses, B&Bs and small hotels, covering the whole business: housekeeping
+and turnover schedules, supplies inventory with reorder points, maintenance logs, seasonal pricing and occupancy
+dashboards, staff onboarding manuals and rotas, guest-message templates, guest-data privacy basics. Focus on what
+property-management systems don't already do. Tool-neutral (never name a PMS brand). Price 7-24 EUR.
 """

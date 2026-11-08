@@ -12,7 +12,7 @@
 A free AI provider rejected every request. **Root cause:** two layers. The provider blocks traffic from VPN exit nodes, and its CDN also rejected Python's default `User-Agent` with a 403 that my code reported as "key rejected". **Fix:** VPN split tunnelling for the app's Python, a real `User-Agent` header, and separating 401 (bad key) from 403 (access refused) in error handling so the UI tells the user the actual cause.
 
 ### 2. Local model crashing the GPU driver (`0xc0000409`)
-Ollama crashed loading a new model on an older NVIDIA driver. **Fix:** the router detects the crash signature and retries the same request on the CPU (`num_gpu: 0`), remembering the choice. Slower, but the office keeps working; updating the driver restores GPU speed.
+Ollama crashed loading a new model. **Fix:** the router detects the crash signature and retries the same request on the CPU (`num_gpu: 0`), remembering the choice, with a thread cap so the laptop stays usable. **Root cause**, found later in Ollama's own log: `CUDA error: device kernel image is invalid` with `driver=12.3`. The model fitted in GPU memory (33/33 layers), but Ollama's CUDA build needed a newer NVIDIA driver than the one installed. Updating the driver fixed it, and the connection test now gives the GPU another chance automatically.
 
 ### 3. Free tiers: 429s, 503s and dropped connections
 **Fix:** per-*model* cool-downs instead of per-provider (Gemini Flash can be exhausted while Flash-Lite still works), retry with back-off for transient errors (503, dropped TLS connections), honest health reporting in the dashboard, and a "nap and retry" state when every model is resting.
@@ -32,7 +32,10 @@ Fixes were deployed but never showed up. **Root cause:** the browser cached the 
 ### 8. A quality gate that passed everything
 The reviewer gave 11 of 12 products 9/10. **Root cause:** the same model was grading its own work with a vague prompt, and it was only shown the first 14k characters (later files looked "empty"). **Fix:** a five-part rubric, a different model for review than for building, fair per-file excerpts with true sizes, and deterministic checks that cap the score.
 
-### 9. One job at a time
+### 9. A quality gate that let a 3/10 through
+After the stricter gate, a product that failed review twice was still passed on "for the owner to decide", so a 3/10 reached the listing step. **Fix:** after the allowed revisions, anything still below 5 is shelved and logged; only borderline 5-6 products reach the owner, marked. Covered by tests.
+
+### 10. One job at a time
 The reviewer sat idle while the builder worked through a queue. **Fix:** two lanes in separate threads (build / everything else), nearly-finished work prioritised, lane-local status so the animation stays truthful, and errors attributed to the agent that actually failed.
 
 ---
@@ -41,6 +44,8 @@ The reviewer sat idle while the builder worked through a queue. **Fix:** two lan
 
 - **Code vs no-code.** First the products were Python scripts, which most buyers can't run. I swung to "no code at all", which wrongly excluded Dynamo tools for Revit users and runnable projects for data learners. The final rule: **the format follows the buyer**, and products must be complete, never parts.
 - **Skills-first vs demand-first.** Departments started from my CV (BIM, data science, hospitality, acting). Actor products had buyers with little money and many free alternatives; productions and professionals pay for time saved. The office now researches **proven demand first**, with my skills as a bonus.
+- **Competing with software the buyer already has.** Operations checklists for hotels sounded useful, but property-management systems already cover most of them. Lesson: check what the buyer's existing tools do before building.
+- **Dynamo-led BIM.** Working Dynamo Player tools save BIM coordinators real hours and are hard to make yourself, but the office can't run Revit, so every tool is tested by a person in Revit before release. An early tool that relied on a pyRevit-only variable is the reason that rule exists.
 - **What I chose not to automate.** Publishing stays manual (marketplace rules, accountability), AI-designed decorative printables are off by choice, and AI-written code is never executed on the host.
 
 ## Results and lessons

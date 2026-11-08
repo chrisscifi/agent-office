@@ -19,7 +19,7 @@ It runs on **free AI models by default** (Gemini, Groq, OpenRouter, or a local m
 | 🤖 **Multi-agent pipeline** | Research → pick → build → QA → listing → human approval, with automatic revision loops |
 | 🔀 **Model routing with fallback** | Per-agent model chains, retries on overload, cool-downs on rate limits, per-model (not per-provider) health |
 | ⚡ **Two parallel work lanes** | The Builder works while the reviewer/researcher lane checks and lists other products |
-| ✅ **Quality gate** | Rubric-based scoring by a *different* model than the builder, plus deterministic checks (formula sanity, Python syntax, missing requirements, offline-only browser tools, Dynamo safety) |
+| ✅ **Quality gate** | Rubric-based scoring by a *different* model than the builder, plus deterministic checks (formula sanity, Python syntax, missing requirements, offline-only browser tools, Dynamo safety); products still failing after two revisions are shelved, never sent on |
 | 📦 **Finished products, not snippets** | `.xlsx` with working formulas, input cells and dropdowns; PDF + DOCX; Dynamo Player `.dyn` graphs; self-contained HTML tools; runnable Python projects |
 | 🔒 **Privacy by design** | Personal data (e-mails, phone, CPR, IBAN, card, passport numbers) is scrubbed from every prompt and blocked from products; no buyer data stored; self-hosted fonts; sandboxed previews |
 | 💶 **Cost control** | Daily/monthly caps for paid models, cost-per-product tracking, and a self-ending trial with a side-by-side quality comparison |
@@ -51,6 +51,7 @@ flowchart LR
     M1 -->|idea| B
     B -->|built| Q
     Q -->|score < 7: fix notes| B
+    Q -->|still < 5 after 2 revisions| X[shelved]
     MK -->|awaiting| H((You<br/>approve / revise / drop))
     H -->|revise| B
     H -->|approve| Z[zip + LISTING.md<br/>+ listing photos]
@@ -68,7 +69,8 @@ stateDiagram-v2
     idea --> built: Builder
     built --> revise: QA < 7 (max 2 auto-revisions)
     revise --> built: Builder (sees previous version + feedback)
-    built --> checked: QA ≥ 7
+    built --> checked: QA ≥ 7 (or 5-6 after 2 revisions)
+    built --> dropped: still < 5 after 2 revisions
     checked --> awaiting: Marketer
     awaiting --> approved: owner
     awaiting --> revise: owner feedback
@@ -85,7 +87,7 @@ A model is skipped if it has no key, is cooling down after a rate limit, is paid
 - **Human-in-the-loop publishing.** Marketplaces ban bot-created listings, and a person should own what gets sold. The office prepares everything; the owner approves and uploads.
 - **Builder writes structured text, the office produces the files.** The LLM emits Markdown and JSON specs (`=== SHEET ===`, `=== DYNAMO ===`, …); deterministic code turns them into `.xlsx`, `.dyn`, PDF and DOCX. That keeps formats valid and makes every file checkable.
 - **Different model for QA than for building**, and a rubric (usable / complete / correct / specific / worth the price) instead of a single "rate 1–10". Self-grading inflated scores to 9/10 on everything.
-- **Format follows the buyer.** Non-technical buyers get spreadsheets, documents or offline browser tools; Revit users get Dynamo Player graphs; Python projects only when the buyer *is* a coder. Code files are never shipped loose.
+- **Format follows the buyer.** Non-technical buyers get spreadsheets, documents or offline browser tools; Revit users get Dynamo Player graphs (the BIM department is Dynamo-led, and every tool is tested by a person in Revit before release); Python projects only when the buyer *is* a coder. Code files are never shipped loose.
 - **AI-written code is inspected, never executed** on the host. Browser-tool previews run in a CSP sandbox with no network or form access.
 - **PDFs via the browser already on the machine** (Edge/Chrome headless) for typography and Unicode coverage, with a font fallback chain against "tofu" boxes and a pure-Python fallback engine.
 
@@ -125,7 +127,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-Covers the privacy scanner, JSON extraction from messy model output, model fallback / retry / budget / trial logic, spreadsheet generation and formula checks, Dynamo graph wiring, browser-tool and Python-project validation, and the full idea → inbox pipeline in demo mode. Runs in CI on every push.
+Covers the privacy scanner, JSON extraction from messy model output, model fallback / retry / budget / trial logic, spreadsheet generation and formula checks, Dynamo graph wiring, browser-tool and Python-project validation, the revise/shelve rules of the quality gate, and the full idea → inbox pipeline in demo mode. Runs in CI on every push.
 
 ## Limitations & honest results
 

@@ -146,7 +146,8 @@ def _ollama_call(model, system, prompt, max_tokens):
         if not cloud:
             opts["num_ctx"] = local_cfg.get("num_ctx", 8192)
             if cpu:
-                opts["num_gpu"] = 0  # run entirely on the processor
+                opts["num_gpu"] = 0  # run entirely on the processor...
+                opts["num_thread"] = int(local_cfg.get("cpu_threads", 4))   # ...but leave most cores for you
         body = {"model": model, "stream": False, "options": opts,
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}]}
         if not kv_get("ollama_no_think_param", False):
@@ -383,6 +384,8 @@ def test_all():
         _disabled.pop(p, None)
         for k in [k for k in _cooldown if k.split(":")[0] == p]:
             _cooldown.pop(k)
+        if p == "ollama" and not CFG.get("local", {}).get("force_cpu", False):
+            kv_set("ollama_cpu", False)   # give the graphics card another chance (e.g. after a driver update)
         entries = list(dict.fromkeys(e for k in CFG["models"] for e in chain(k) if e.startswith(p + ":")))
         if not entries:
             res[p] = "connected, but not used in config.toml [models]"
