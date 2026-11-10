@@ -126,6 +126,11 @@ def provider_status():
         out[p] = {"status": st, "connected": has_key(p),
                   "models": ollama_models() if p == "ollama" else None,
                   "calls_today": kv_get(f"calls:{p}:{int(day_start())}", 0)}
+    has_tavily = bool(os.environ.get("TAVILY_API_KEY"))
+    used = kv_get(f"calls:tavily:{int(day_start())}", 0)
+    cap = int(CFG.get("research", {}).get("web_search_daily_cap", 30))
+    out["tavily"] = {"status": ("ready" if used < cap else f"daily search cap reached ({cap})") if has_tavily else "off",
+                     "connected": has_tavily, "models": None, "calls_today": used}
     return out
 
 
@@ -408,4 +413,10 @@ def test_all():
                     break
         ok = any(r.endswith(": OK") for r in results)
         res[p] = ("OK · " if ok else "failed · ") + " | ".join(results)
+    if os.environ.get("TAVILY_API_KEY"):
+        from .agents import web_search
+        res["tavily"] = "OK · web search works" if web_search("revit dynamo", max_results=1) else \
+            "failed · check the key (or the daily cap)"
+    else:
+        res["tavily"] = "not connected"
     return res

@@ -71,14 +71,134 @@ def reddit_signals(queries, limit=8):
     return "\n".join(lines[:24])
 
 
+# Free web research (Tavily: free plan, no card). Used only when TAVILY_API_KEY is set; capped per day.
+TAVILY_URL = "https://api.tavily.com/search"
+FORMAT_OF = {".xlsx": "spreadsheet", ".docx": "document", ".pdf": "document", ".dyn": "Dynamo tool",
+             ".html": "browser tool", ".py": "Python project", ".ipynb": "Python project"}
+
+
+def web_search(query, include_domains=None, max_results=5):
+    """One real web search. Returns [{title, url, snippet}]; [] when there's no key, the daily cap is hit or it fails."""
+    import os
+    from .core import day_start
+    key = os.environ.get("TAVILY_API_KEY", "").strip()
+    if not key:
+        return []
+    cap = int(CFG.get("research", {}).get("web_search_daily_cap", 30))
+    counter = f"calls:tavily:{int(day_start())}"
+    if kv_get(counter, 0) >= cap:
+        return []
+    from .privacy import redact
+    body = {"api_key": key, "query": redact(query)[:300], "max_results": max_results, "search_depth": "basic"}
+    if include_domains:
+        body["include_domains"] = include_domains
+    req = urllib.request.Request(TAVILY_URL, data=json.dumps(body).encode("utf-8"),
+                                 headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}",
+                                          "User-Agent": "AgentOffice/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=25) as r:
+            data = json.load(r)
+    except Exception as e:
+        log("accountant", f"Web search hiccup: {str(e)[:90]}")
+        return []
+    kv_set(counter, kv_get(counter, 0) + 1)
+    return [{"title": (r.get("title") or "")[:140], "url": r.get("url", ""),
+             "snippet": " ".join((r.get("content") or "").split())[:300]} for r in data.get("results", [])]
+
+
+def web_research(queries):
+    """A few targeted searches: general demand, what sells on marketplaces, and the free alternatives."""
+    if not queries:
+        return ""
+    plan = [(queries[0], None, "Demand"),
+            (queries[0], ["etsy.com", "gumroad.com"], "Marketplace listings"),
+            (f"free {queries[0]} template OR plugin OR download", None, "Free alternatives")]
+    if len(queries) > 1:
+        plan.insert(1, (queries[1], None, "Demand"))
+    out = []
+    for qry, domains, label in plan:
+        for r in web_search(qry, domains):
+            out.append(f"- [{label}] {r['title']} | {r['url']} | {r['snippet']}")
+    return "\n".join(out[:24])
+
+
+def _formats(folder):
+    files = OUTPUT / folder / "files" if folder else None
+    if not files or not files.exists():
+        return set()
+    return {FORMAT_OF[f.suffix.lower()] for f in files.rglob("*") if f.suffix.lower() in FORMAT_OF}
+
+
+def office_memory(sid, recent=40):
+    """What the office has learned: quality per format and model, the owner's decisions, and what failed."""
+    rows = q("select * from products order by id desc limit ?", (recent,))
+    owner_dropped = {r["product_id"] for r in q("select product_id from approvals where status='dropped'")}
+    scores = {}
+    liked, rejected, shelved = [], [], []
+    for r in rows:
+        qa = json.loads(r["qa"]) if r["qa"] else {}
+        score = qa.get("score")
+        model = (r["built_with"] or "").split(":")[0] or None
+        if score is not None and model:
+            for f in _formats(r["folder"]) or {"unknown"}:
+                scores.setdefault((f, model), []).append(int(score))
+        if r["status"] in ("approved", "live"):
+            liked.append(r["title"])
+        elif r["status"] == "dropped" and r["id"] in owner_dropped:
+            rejected.append(r["title"])
+        elif r["status"] == "dropped" and score is not None and score < 5 and r["stream"] == sid:
+            shelved.append(f"{r['title']} ({score}/10: {(qa.get('verdict') or '')[:110]})")
+    quality = [f"{f} built with {m}: average {sum(v) / len(v):.1f}/10 over {len(v)}"
+               for (f, m), v in sorted(scores.items(), key=lambda kv: -len(kv[1]))]
+    return "\n".join([
+        "Average review score by format and builder model: " + ("; ".join(quality[:10]) or "no data yet"),
+        "Owner approved / published: " + ("; ".join(liked[:8]) or "nothing yet"),
+        "Owner dropped (avoid anything similar): " + ("; ".join(rejected[:8]) or "nothing yet"),
+        "Shelved in this department after failing review (avoid these shapes): " + ("; ".join(shelved[:6]) or "none"),
+    ])
+
+
+def _builder_now():
+    """Which model would build right now, so ideas fit what can actually be made."""
+    from .llm import chain, usable
+    for entry in chain("builder"):
+        if usable(entry.split(":")[0], entry):
+            return entry
+    return "unknown"
+
+
+SCOUT_RULES = """SCOUT RULES (follow all of them):
+1. HONEST EVIDENCE. Base each idea on the research above. For every claim give its source (a URL or a Reddit thread
+   from the list) and label it "found" (seen in the research) or "assumed" (your judgement). Weak evidence is fine if
+   it is labelled. NEVER invent sales numbers, review counts, prices or listings.
+2. FREE-ALTERNATIVE CHECK. Name the best free option the buyer already has (built into their software, free
+   templates, free plugins/packages) and say concretely why they would still pay. No convincing answer = drop the idea.
+3. ONE JOB, DONE WELL. Each product solves ONE clear problem with at most 3 product files plus a Start Here guide.
+   No all-in-one bundles.
+4. BUILDABLE NOW. The Builder will use: {builder}. Prefer formats that score well with it (see office memory).
+   On free models: spreadsheets and documents first, Dynamo tools for Revit users, browser tools only when small.
+5. THREE GENUINELY DIFFERENT IDEAS: different buyer problems and, ideally, different formats.
+6. LEARN FROM HISTORY. Nothing similar to what was already made, dropped by the owner, or shelved (office memory).
+7. FOLLOW THE DEPARTMENT BRIEF and the owner's taste over generic trends.
+8. REALISTIC PRICE: what comparable products cost, with the source if found.
+Good example of the right size: "a Dynamo Player tool that renumbers doors by room for BIM coordinators"."""
+
+
 def scout_and_pick(sid):
+    import random
     s = stream(sid)
     existing = [p["title"] for p in q("select title from products where stream=?", (sid,))]
     stats = stream_stats(sid)
+    memory = office_memory(sid)
+    builder = _builder_now()
 
     status("scout", "working", f"Researching {s['name']}…")
     log("scout", f"Researching demand for “{s['name']}”")
-    signals = reddit_signals(s.get("research_queries", []))
+    queries = s.get("research_queries", [])
+    web = web_research(queries)
+    if web:
+        log("scout", f"Read {web.count(chr(10)) + 1} web results (demand, marketplaces, free alternatives)")
+    signals = reddit_signals(queries)
     if signals:
         log("scout", f"Read {signals.count(chr(10)) + 1} real Reddit threads for demand clues")
     research = CFG.get("research", {})
@@ -90,45 +210,88 @@ def scout_and_pick(sid):
     res = ask_json("scout", scout_key, _base_system("the Scout (market researcher)"), f"""
 Department: {s['name']}  (sold via {s['channel']})
 Brief: {s['brief']}
-Already made (don't repeat): {existing or 'nothing yet'}
+Already made in this department (don't repeat): {existing or 'nothing yet'}
 Performance so far: {json.dumps(stats)}
-Real recent Reddit threads in this niche (evidence of what people struggle with):
+
+OFFICE MEMORY
+{memory}
+
+WEB RESEARCH (title | url | snippet):
+{web or '(no web search available: rely on Reddit and label your judgement as "assumed")'}
+
+REDDIT THREADS (what people struggle with):
 {signals or '(none fetched)'}
 
-Find 3 specific digital-product ideas that PROVABLY SELL. Demand first: base them on evidence (bestselling or
-highly-reviewed listings on Etsy/Gumroad, repeated forum requests, search demand) from the threads above and, if
-available, web search. Go NICHE (e.g. "ADHD planner for night-shift nurses", not "planner"); broad terms are
-saturated. For each idea say what proves demand, what existing listings do badly (the gap), and the price
-buyers already pay. Prefer gaps: things people ask for that existing
-listings do poorly, or the owner's language edge.
+Propose 3 specific, finished digital products this department could sell.
+{SCOUT_RULES.format(builder=builder)}
 {"" if printables_allowed() else "Do NOT suggest designed printables (planners, wall art, signs, decorative pages)."}
 Every idea must be a FINISHED product its buyer can use as-is: spreadsheets with formulas, print-ready PDF + Word
 documents, offline browser tools (one HTML file) for non-technical buyers, Dynamo Player graphs for Revit users,
 or complete runnable Python projects ONLY when the buyers are coders/data learners buying the code itself.
-Never snippets, starter code or parts the buyer must finish.
-JSON: {{"ideas":[{{"title":"","buyer":"","problem":"","evidence":"what proves people buy this","gap":"","contents":"which spreadsheets / documents / printables / tools the buyer gets",
-"price_eur":0,"effort":"S|M","marketplace":"Etsy|Gumroad"}}]}}""", stream=sid,
+JSON: {{"ideas":[{{"title":"","buyer":"","problem":"","format":"spreadsheet|document|Dynamo tool|browser tool|Python project",
+"files":"the max 3 product files + Start Here","evidence":"claims with sources, each marked found/assumed",
+"sources":["urls or thread titles"],"free_alternative":"","why_pay_anyway":"","gap":"","price_eur":0,
+"price_source":"","effort":"S|M","marketplace":"Etsy|Gumroad"}}]}}""", stream=sid,
         web_search=scout_key == "researcher", max_tokens=6000)
-    ideas = res["ideas"][:3]
+    ideas = [i for i in res.get("ideas", []) if isinstance(i, dict)][:3]
+    if not ideas:
+        raise ValueError("The Scout returned no usable ideas")
+    random.shuffle(ideas)   # no first-in-the-list bias when Mira scores them
     status("scout", "walking", f"{len(ideas)} ideas for Mira!", target="master")
 
-    status("master", "thinking", f"Choosing for {s['name']}…")
+    status("master", "thinking", f"Scoring ideas for {s['name']}…")
     pick = ask_json("master", "master", _base_system("the Master agent (manager)"), f"""
-The Scout proposes these ideas for {s['name']}:
-{json.dumps(ideas, indent=1)}
+The Scout proposes these ideas for {s['name']} (numbered from 0):
+{json.dumps(list(enumerate(ideas)), indent=1)}
+Department brief: {s['brief']}
 Department performance: {json.dumps(stats)}
-Pick the ONE idea with the strongest EVIDENCE of buyers paying and a clear gap, and the best chance of a first sale, that the Builder can fully produce as
-finished files its buyer can use as-is: spreadsheets (.xlsx), documents (PDF + Word), offline browser tools
-(.html), Dynamo Player graphs (.dyn) for Revit users, or complete Python projects for coder buyers. Reject anything
-the buyer would have to finish, or files the Builder can't make (e.g. DWG/CAD drawings, Revit families, video).
-Give the Builder precise notes: the buyer type, and which spreadsheets (tabs, columns, key formulas), documents
-(sections), browser tools (inputs/outputs), Dynamo tools or Python project files to make.
-JSON: {{"pick":0,"reason":"","build_notes":""}}""", stream=sid, mock_key="master_pick")
-    idea = ideas[int(pick.get("pick", 0)) % len(ideas)]
-    idea["build_notes"] = pick.get("build_notes", "")
+The Builder will use: {builder}
+OFFICE MEMORY
+{memory}
+
+Score EVERY idea from 1 (poor) to 5 (excellent) on:
+- evidence: real, sourced signs that buyers pay ("found" beats "assumed"; invented-looking claims score 1)
+- gap: a clear reason to pay over the free alternative
+- buildable: the Builder can fully make it as finished files in one go with the model above (use the memory's
+  scores per format; files the Builder can't make, e.g. DWG/CAD, Revit families, video = 1)
+- owner_fit: fits the department brief and the owner's past approvals; nothing like dropped or shelved items
+- price: realistic price for what the buyer gets
+Be critical; do not give everything 4s. For each idea also write precise build notes: buyer type and exactly which
+spreadsheets (tabs, columns, key formulas), documents (sections), browser tools (inputs/outputs), Dynamo tools
+(inputs, what OUT shows) or Python files to make.
+JSON: {{"scores":[{{"idea":0,"evidence":1,"gap":1,"buildable":1,"owner_fit":1,"price":1,"note":"one sentence","build_notes":""}}]}}""",
+        stream=sid, mock_key="master_pick")
+    weights = {"evidence": 2, "gap": 1, "buildable": 2, "owner_fit": 1, "price": 1}
+
+    def total(sc):
+        t = 0
+        for k, w in weights.items():
+            try:
+                t += w * max(1, min(5, int(sc.get(k, 1))))
+            except (TypeError, ValueError):
+                t += w
+        return t
+    scored = []
+    for sc in pick.get("scores", []):
+        try:
+            i = int(sc.get("idea", -1))
+        except (TypeError, ValueError):
+            continue
+        if 0 <= i < len(ideas) and i not in {x_[0] for x_ in scored}:
+            scored.append((i, total(sc), sc))
+    if not scored:   # model ignored the format: fall back to its old-style answer or the first idea
+        scored = [(int(pick.get("pick", 0)) % len(ideas), 0, {"build_notes": pick.get("build_notes", ""),
+                                                             "note": pick.get("reason", "")})]
+    scored.sort(key=lambda t: -t[1])
+    best_i, best_total, best = scored[0]
+    idea = ideas[best_i]
+    idea["build_notes"] = best.get("build_notes", "")
+    idea["mira_scores"] = {k: best.get(k) for k in weights} | {"total": best_total, "max": 5 * sum(weights.values())}
     pid = x("insert into products(stream,title,status,idea,created,updated) values(?,?,?,?,?,?)",
             (sid, idea["title"], "idea", json.dumps(idea), time.time(), time.time()))
-    log("master", f"Greenlit #{pid} “{idea['title']}” — {pick.get('reason', '')[:120]}")
+    board = ", ".join(f"“{ideas[i]['title'][:38]}” {t}" for i, t, _ in scored)
+    log("master", f"Greenlit #{pid} “{idea['title']}” ({best_total}/{5 * sum(weights.values())}) — "
+                  f"{(best.get('note') or '')[:110]} | scores: {board}")
     status("master", "walking", f"Bo, build “{idea['title'][:40]}”", target="builder")
 
 
@@ -171,6 +334,12 @@ NO_CODE_RULES = """FINISHED-PRODUCT RULES (these override anything else, includi
 - Anything that calculates or tracks for a non-technical buyer: spreadsheet or browser tool.
 - Every Dynamo tool needs: an 'Apply changes' switch defaulting to false (preview first), a transaction around
   model changes, a readable result list in OUT, no hard-coded element ids, and Start Here steps for Dynamo Player.
+  Dynamo Python is the PythonNet3 engine (Dynamo 3.x/4.x, Revit 2025+): get the document with
+  clr.AddReference('RevitServices'); from RevitServices.Persistence import DocumentManager;
+  doc = DocumentManager.Instance.CurrentDBDocument; wrap changes in TransactionManager.Instance.EnsureInTransaction(doc)
+  / TransactionTaskDone() (no arguments). Never use __revit__ (pyRevit only) or ElementId.IntegerValue (removed:
+  use .Value). Wrap .NET collections in list(...) before indexing or
+  appending, use enum members (not integers), and call ToDSType/UnwrapElement where needed.
 - Planners, worksheets, signs, CV/resume templates, cards and wall printables are PRINTABLE blocks: a designed
   page in HTML/CSS (beautiful, on-trend, consistent style, generous white space, print-safe colours), printed to PDF.
 - Browser tools: fully self-contained (inline CSS/JS, no internet requests), clear labels, works on phone and
@@ -211,7 +380,7 @@ percent, date, time. Mark columns the buyer types into with "input": true (shown
 example rows AND empty pre-formulated rows (e.g. 20) the buyer can fill. "column" in validation is 0-based.)
 
 === DYNAMO: <Tool title> ===   (only for Revit/BIM tools)
-{"title": "...", "description": "one line", "revit_versions": "2023-2026", "engine": "CPython3",
+{"title": "...", "description": "one line", "revit_versions": "2025 and newer", "engine": "PythonNet3",
  "inputs": [{"name": "Prefix", "type": "string", "default": "R-", "description": "shown in Dynamo Player"},
             {"name": "Apply changes", "type": "boolean", "default": false, "description": "Off = preview only"}],
  "python": "full Python for the Dynamo Python Script node; read inputs as IN[0], IN[1]...; set OUT to a list of readable lines"}

@@ -524,6 +524,14 @@ def dynamo_problems(spec):
         probs.append("script changes the model but has no on/off switch input (e.g. 'Apply changes', default false)")
     if re.search(r"ElementId\(\s*\d{3,}", code):
         probs.append("hard-coded element ids won't exist in the buyer's model")
+    if ".IntegerValue" in code:
+        probs.append("uses ElementId.IntegerValue, removed in recent Revit versions: use .Value instead")
+    if re.search(r"TransactionTaskDone\(\s*\w", code):
+        probs.append("TransactionTaskDone() takes no arguments: call TransactionManager.Instance.TransactionTaskDone()")
+    if "__revit__" in code:
+        probs.append("uses __revit__, which only exists in pyRevit: use DocumentManager.Instance.CurrentDBDocument in Dynamo")
+    if "IronPython" in code or "import clr" not in code:
+        probs.append("Dynamo Python (PythonNet3) needs 'import clr' and the Revit API references; IronPython-only code won't run")
     return probs[:10]
 
 
@@ -559,7 +567,7 @@ def spec_to_dyn(spec, out_path):
                              "Description": inp.get("description", "")})
     out_port = _port("OUT", "Result of the python script")
     nodes.append({"ConcreteType": "PythonNodeModels.PythonNode, PythonNodeModels", "Code": spec["python"],
-                  "Engine": spec.get("engine", "CPython3"), "VariableInputPorts": True, "Id": py_id,
+                  "Engine": "PythonNet3" if str(spec.get("engine", "")).lower() in ("", "cpython3", "cpython", "ironpython2") else spec.get("engine"), "VariableInputPorts": True, "Id": py_id,
                   "NodeType": "PythonScriptNode", "Inputs": py_inputs, "Outputs": [out_port],
                   "Replication": "Disabled", "Description": "Runs an embedded Python script."})
     views.append({"Name": "Result: " + name[:40], "ShowGeometry": True, "Id": py_id, "IsSetAsInput": False,

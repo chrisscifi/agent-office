@@ -63,6 +63,9 @@ researcher = ["claude:claude-sonnet-5-5"]
 
 [research]
 use_claude_web_research = false
+# Free web search for Sol (Tavily: tavily.com, free plan of 1,000 searches/month, no card). Paste the key in
+# AI connections. About 4 searches per idea round; this daily cap keeps you inside the free plan.
+web_search_daily_cap = 30
 
 [limits]
 # Groq's free tier rejects very large single requests, so keep its replies modest.

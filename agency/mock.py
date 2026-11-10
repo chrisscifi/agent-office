@@ -16,11 +16,15 @@ def reply(key, prompt):
     if key == "scout":
         picks = random.sample(IDEAS, 3)
         return json.dumps({"ideas": [{"title": t, "buyer": "demo buyer", "problem": "demo problem",
-                                      "evidence": "demo mode — no real research done", "contents": "README + 2 files",
+                                      "format": "spreadsheet", "files": "Start Here + 2 files",
+                                      "evidence": "demo mode: no real research done (assumed)", "sources": [],
+                                      "free_alternative": "demo", "why_pay_anyway": "demo",
                                       "price_eur": p, "effort": "S"} for t, p in picks]})
     if key == "master_pick":
-        return json.dumps({"pick": random.randint(0, 2), "reason": "demo pick: smallest effort, clear buyer",
-                           "build_notes": "keep it short"})
+        return json.dumps({"scores": [{"idea": i, "evidence": random.randint(1, 5), "gap": random.randint(1, 5),
+                                       "buildable": random.randint(2, 5), "owner_fit": random.randint(2, 5),
+                                       "price": random.randint(2, 5), "note": "demo scoring",
+                                       "build_notes": "keep it short"} for i in range(3)]})
     if key == "builder":
         return ("=== DOC: Start Here ===\n# Demo product\n\nMade in **demo mode**. Connect an AI and Bo writes the real thing.\n=== END ===\n"
                 "=== DOC: Checklist ===\n# Checklist\n\n- [ ] Step one\n- [ ] Step two\n=== END ===\n"

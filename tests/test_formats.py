@@ -45,15 +45,22 @@ def test_dynamo_tool_checks_and_graph(office, tmp_path):
     from agency.formats import dynamo_problems, spec_to_dyn
     good = {"title": "Renumber", "inputs": [{"name": "Prefix", "type": "string"},
                                             {"name": "Apply changes", "type": "boolean", "default": False}],
-            "python": "from RevitServices.Transactions import TransactionManager\nprefix, apply = IN[0], IN[1]\n"
+            "python": "import clr\nclr.AddReference('RevitServices')\n"
+                      "from RevitServices.Transactions import TransactionManager\nprefix, apply = IN[0], IN[1]\n"
                       "if apply:\n    TransactionManager.Instance.EnsureInTransaction(doc)\nOUT = ['done']"}
     assert dynamo_problems(good) == []
     spec_to_dyn(good, tmp_path / "t.dyn")
     g = json.loads((tmp_path / "t.dyn").read_text())
     ports = {p["Id"] for n in g["Nodes"] for p in n["Inputs"] + n["Outputs"]}
     assert all(c["Start"] in ports and c["End"] in ports for c in g["Connectors"])
+    assert all(n.get("Engine") == "PythonNet3" for n in g["Nodes"] if "Engine" in n)   # Dynamo 3.x/4.x engine
     bad = dict(good, python="Transaction(doc).Start()\nfor i in range(3)\n  pass", inputs=good["inputs"][:1])
     assert any("syntax" in p for p in dynamo_problems(bad))
+    pyrevit = dict(good, python=good["python"] + "\ndoc = __revit__.ActiveUIDocument.Document")
+    assert any("pyRevit" in p for p in dynamo_problems(pyrevit))
+    old_api = dict(good, python=good["python"] + "\nids = [d.Id.IntegerValue for d in []]\nTransactionManager.Instance.TransactionTaskDone(doc)")
+    found = " ".join(dynamo_problems(old_api))
+    assert ".Value" in found and "no arguments" in found
 
 
 def test_browser_tools_must_work_offline(office):

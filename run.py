@@ -45,6 +45,12 @@ def _product(p):
         p["zip"] = next((z.relative_to(OUTPUT).as_posix() for z in (OUTPUT / p["folder"]).glob("*.zip")), None)
         prev = OUTPUT / p["folder"] / "source" / "previews"
         p["previews"] = sorted(f.relative_to(OUTPUT).as_posix() for f in prev.glob("*.png"))[:6] if prev.exists() else []
+        chk = OUTPUT / p["folder"] / "source" / "_checks.json"
+        try:
+            p["checks"] = json.loads(chk.read_text(encoding="utf-8")) if chk.exists() else None
+        except (OSError, ValueError):
+            p["checks"] = None
+    p["revisions"] = kv_get(f"qa_tries:{p['id']}", 0)   # automatic send-backs by Mira
     return p
 
 

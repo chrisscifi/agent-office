@@ -59,6 +59,10 @@ input{flex:1;min-width:0}
 .conn b{width:92px;font-size:13px}.conn .st{font-size:12px;color:var(--muted);flex-basis:100%;margin-left:100px;margin-top:-4px}
 .ok{color:var(--good)!important}.err{color:var(--bad)!important}
 .qa{font-size:12px;padding:2px 7px;border-radius:10px;background:#1e3b2c;color:var(--good)}
+.qa.mid{background:#3b331e;color:#f5c26b}.qa.low{background:#3b1e1e;color:#ff8a8a}
+.review{display:grid;grid-template-columns:auto 1fr auto;gap:3px 10px;align-items:center;font-size:12px;margin:6px 0}
+.review .bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden}.review .bar i{display:block;height:100%;background:var(--good)}
+.review-h{font-size:12px;color:var(--muted);margin-top:8px;text-transform:uppercase;letter-spacing:.04em}
 .stream{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}
 ol{margin:6px 0 0 18px;padding:0;font-size:13px}
@@ -159,10 +163,11 @@ const PROVIDERS = [
   ["openrouter", "OPENROUTER_API_KEY", "OpenRouter", "https://openrouter.ai/settings/keys"],
   ["ollama", null, "Ollama (local)", "https://ollama.com/download"],
   ["claude", "ANTHROPIC_API_KEY", "Claude (paid)", "https://console.anthropic.com/settings/keys"],
+  ["tavily", "TAVILY_API_KEY", "Tavily (web search, free)", "https://app.tavily.com"],
 ];
 let connBuilt = false, testResult = {};
 function renderConns(){
-  const n = PROVIDERS.filter(p => S.providers[p[0]].connected).length;
+  const n = PROVIDERS.filter(p => p[0] !== "tavily" && S.providers[p[0]] && S.providers[p[0]].connected).length;
   $("connHint").innerHTML = n ? `${n} connected. The office uses the free ones first and switches automatically when one hits its daily limit.`
     : `<b style="color:var(--warn)">Connect at least one free AI to leave demo mode.</b> Groq is the best start: free, no card, 2 minutes.`;
   if (!connBuilt) {
@@ -185,6 +190,20 @@ function renderConns(){
 }
 async function saveKey(env, id){ const v = $("k_" + id).value.trim(); if (!v) return; await post("/api/keys", {name: env, value: v}); $("k_" + id).value = ""; }
 async function testConns(btn){ btn.textContent = "TESTING…"; testResult = await (await fetch("/api/test", {method: "POST"})).json(); btn.textContent = "TEST ALL"; refresh(); }
+function reviewHTML(p) {
+  const qa = p.qa || {}, b = qa.breakdown || {}, ck = p.checks || {}, probs = ck.problems || [], skipped = ck.skipped_code || [];
+  if (!p.qa && !p.checks) return "";
+  const rows = [["usable", "Usable as-is"], ["complete", "Complete"], ["correct", "Correct"], ["specific", "Specific"], ["worth", "Worth the price"]]
+    .filter(([k]) => b[k] !== undefined)
+    .map(([k, label]) => `<span>${label}</span><span class="bar"><i style="width:${Math.max(0, Math.min(2, +b[k])) * 50}%"></i></span><b>${esc(b[k])}/2</b>`).join("");
+  const revs = +p.revisions || 0;
+  return `<details><summary>Mira's full review</summary><div style="margin-top:6px">
+    ${rows ? `<div class="review-h">Score breakdown</div><div class="review">${rows}</div>` : ""}
+    ${qa.fix_notes ? `<div class="review-h">What she'd still fix</div><div class="desc">${esc(qa.fix_notes)}</div>` : ""}
+    <div class="review-h">Automatic checks</div><div class="desc" style="max-height:none">${probs.length ? probs.map(x => "✖ " + esc(x)).join("\n") : "✔ All automatic checks passed"}${skipped.length ? "\nRemoved loose code files: " + esc(skipped.join(", ")) : ""}</div>
+    <div class="review-h">History</div><div class="desc" style="max-height:none">${revs ? `Sent back to Bo ${revs} time${revs > 1 ? "s" : ""} before reaching you` : "Passed on the first review"}${p.built_with ? " · built with " + esc(p.built_with) : ""}</div>
+  </div></details>`;
+}
 function fileIcon(f){ return f.endsWith(".html") ? "🌐" : /\.(py|ipynb)$/.test(f) ? "🐍" : f.endsWith(".dyn") ? "🧩" : f.endsWith(".xlsx") ? "📊" : f.endsWith(".pdf") ? "📕" : f.endsWith(".docx") ? "📝" : "📄"; }
 function renderTrial(){
   const t = S.trial; $("trialCard").hidden = !t; if (!t) return;
@@ -232,7 +251,8 @@ function render(){
       <span class="chip">${esc(st.name)}</span>
       <h3>${esc(L.title || p.title)}</h3>
       <div class="muted">${esc(L.subtitle || "")} · <b>€${esc(L.price_eur)}</b></div>
-      ${p.qa ? `<div class="row"><span class="qa">Mira's QA ${esc(p.qa.score)}/10</span><span class="muted">${esc(p.qa.verdict)}</span></div>` : ""}
+      ${p.qa ? `<div class="row"><span class="qa ${p.qa.score >= 7 ? "" : p.qa.score >= 5 ? "mid" : "low"}">Mira's QA ${esc(p.qa.score)}/10</span><span class="muted">${esc(p.qa.verdict)}</span></div>` : ""}
+      ${reviewHTML(p)}
       ${(p.previews||[]).length ? `<div class="row">${p.previews.map(im => `<a href="/output/${encodeURI(im)}" target="_blank" rel="noopener"><img src="/output/${encodeURI(im)}" alt="preview" style="width:72px;height:102px;object-fit:cover;border-radius:3px;border:1px solid var(--line)"></a>`).join("")}</div>` : ""}
       <details><summary>Listing & posts</summary><div class="desc">${L.etsy_title ? "ETSY TITLE: " + esc(L.etsy_title) + "\nETSY TAGS: " + esc((L.etsy_tags||[]).join(", ")) + "\nAI NOTE: " + esc(L.ai_disclosure||"") + "\n\n" : ""}${esc(L.description)}\n\nTags: ${esc((L.tags||[]).join(", "))}\n\n${(L.posts||[]).map(x=>"— "+esc(x.where)+":\n"+esc(x.text)).join("\n\n")}</div></details>
       <details open><summary>Files (${(p.files||[]).filter(f=>!f.endsWith(".html")).length}): click to read</summary><div class="desc">${(p.files||[]).filter(f=>!f.endsWith(".html")).map(f=>`<a href="/view?p=${encodeURIComponent(f)}">${fileIcon(f)} ${esc(f.split("/files/")[1]||f)}</a>`).join("<br>")}</div></details>

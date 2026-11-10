@@ -35,7 +35,13 @@ The reviewer gave 11 of 12 products 9/10. **Root cause:** the same model was gra
 ### 9. A quality gate that let a 3/10 through
 After the stricter gate, a product that failed review twice was still passed on "for the owner to decide", so a 3/10 reached the listing step. **Fix:** after the allowed revisions, anything still below 5 is shelved and logged; only borderline 5-6 products reach the owner, marked. Covered by tests.
 
-### 10. One job at a time
+### 10. Ideas that sounded good but weren't
+The Scout was asked for ideas that "provably sell" with only a few Reddit posts as input, so the model invented convincing evidence, and the Master picked with a one-line gut call that favoured the first idea. **Fix:** evidence must cite sources and be labelled found/assumed; a free-alternative check; one job per product; free web search (Tavily) with a daily cap; and a weighted scoring rubric (evidence and buildability count double) over shuffled ideas, informed by the office's memory of review scores per format and the owner's approvals and drops.
+
+### 11. Dynamo tools that failed in Revit 2027
+Testing in Revit 2027 surfaced three problems the static checks didn't know about: Dynamo 4 ships only the PythonNet3 engine (graphs declared CPython3), `ElementId.IntegerValue` was removed from the API (use `.Value`), and a generated script passed an argument to `TransactionTaskDone()`. **Fix:** graphs now target PythonNet3, and the Dynamo checker flags all three, plus pyRevit-only code like `__revit__`. Lesson: static checks catch known mistakes; only a real test in the target software finds new ones, which is why a person tests every Dynamo tool before release.
+
+### 12. One job at a time
 The reviewer sat idle while the builder worked through a queue. **Fix:** two lanes in separate threads (build / everything else), nearly-finished work prioritised, lane-local status so the animation stays truthful, and errors attributed to the agent that actually failed.
 
 ---

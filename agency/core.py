@@ -27,7 +27,7 @@ except Exception:
 
 CFG = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8-sig"))
 
-KEY_NAMES = ["GROQ_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"]
+KEY_NAMES = ["GROQ_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "TAVILY_API_KEY"]
 
 
 def load_keys():

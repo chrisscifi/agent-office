@@ -17,12 +17,14 @@ It runs on **free AI models by default** (Gemini, Groq, OpenRouter, or a local m
 | | |
 |---|---|
 | 🤖 **Multi-agent pipeline** | Research → pick → build → QA → listing → human approval, with automatic revision loops |
+| 🔎 **Evidence-based research** | The Scout cites sources (free web search via Tavily, plus Reddit), names the free alternative and why buyers would still pay; the Master scores ideas on a weighted rubric (shuffled to avoid order bias) using the office's memory of past quality and the owner's decisions |
 | 🔀 **Model routing with fallback** | Per-agent model chains, retries on overload, cool-downs on rate limits, per-model (not per-provider) health |
 | ⚡ **Two parallel work lanes** | The Builder works while the reviewer/researcher lane checks and lists other products |
 | ✅ **Quality gate** | Rubric-based scoring by a *different* model than the builder, plus deterministic checks (formula sanity, Python syntax, missing requirements, offline-only browser tools, Dynamo safety); products still failing after two revisions are shelved, never sent on |
 | 📦 **Finished products, not snippets** | `.xlsx` with working formulas, input cells and dropdowns; PDF + DOCX; Dynamo Player `.dyn` graphs; self-contained HTML tools; runnable Python projects |
 | 🔒 **Privacy by design** | Personal data (e-mails, phone, CPR, IBAN, card, passport numbers) is scrubbed from every prompt and blocked from products; no buyer data stored; self-hosted fonts; sandboxed previews |
 | 💶 **Cost control** | Daily/monthly caps for paid models, cost-per-product tracking, and a self-ending trial with a side-by-side quality comparison |
+| 🔍 **Transparent reviews** | Every inbox item shows Mira's full review: score breakdown, fix notes, automatic check results and revision history |
 | 🎮 **Game-style dashboard** | Canvas-rendered pixel office (agents walk, talk, nap), inbox, connections, departments, money board |
 
 ## Screenshots
@@ -127,13 +129,13 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-Covers the privacy scanner, JSON extraction from messy model output, model fallback / retry / budget / trial logic, spreadsheet generation and formula checks, Dynamo graph wiring, browser-tool and Python-project validation, the revise/shelve rules of the quality gate, and the full idea → inbox pipeline in demo mode. Runs in CI on every push.
+Covers the privacy scanner, JSON extraction from messy model output, model fallback / retry / budget / trial logic, spreadsheet generation and formula checks, Dynamo graph wiring, browser-tool and Python-project validation, the revise/shelve rules of the quality gate, web research (key handling, daily cap, privacy scrubbing), scored idea picking, and the full idea → inbox pipeline in demo mode. 29 tests, run in CI on every push.
 
 ## Limitations & honest results
 
 - Product quality depends heavily on the model doing the building; small local models produce noticeably weaker products.
 - Free tiers change and rate-limit often; the router handles it, but throughput varies.
-- Demand research is only as good as its sources (Reddit by default; optional paid web search).
+- Demand research is only as good as its sources (Reddit by default; free Tavily web search when a key is added).
 - As of writing, the project has produced sellable products, but **no meaningful sales**. Distribution, not production, turned out to be the hard part.
 
 See [docs/case-study.md](docs/case-study.md) for the problems I ran into and how they were solved.
